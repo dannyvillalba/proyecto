@@ -30,4 +30,17 @@ public class SistemaUsuarios {
     public void eliminar(Usuario usuario) {
         lista.remove(usuario);
     }
+
+    // Imprime en la terminal todos los usuarios guardados (para mostrar en la sustentacion)
+    public void imprimir() {
+        System.out.println();
+        System.out.println("===== USUARIOS GUARDADOS EN JAVA (" + lista.size() + ") =====");
+        for (int i = 0; i < lista.size(); i++) {
+            Usuario u = lista.get(i);
+            System.out.println((i + 1) + ". Nombre: " + u.obtenerNombre()
+                    + " | Usuario: " + u.obtenerUsuario()
+                    + " | Clave: " + "*".repeat(u.obtenerClave().length()));
+        }
+        System.out.println("=========================================");
+    }
 }
