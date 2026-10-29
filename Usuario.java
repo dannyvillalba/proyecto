@@ -21,6 +21,11 @@ public class Usuario {
         return usuario;
     }
 
+    // Devuelve la contrasena (solo se usa para mostrarla en la terminal en la sustentacion)
+    public String obtenerClave() {
+        return clave;
+    }
+
     // Revisa si la contrasena es la correcta
     public boolean claveCorrecta(String claveEscrita) {
         return clave.equals(claveEscrita);
