@@ -17,7 +17,7 @@ public class Servidor {
     private static final String ERROR_NUMEROS = "ERROR\nEscribe todos los datos con numeros mayores a 0";
 
     public static void main(String[] args) throws Exception {
-        HttpServer servidor = HttpServer.create(new InetSocketAddress(8080), 0);
+        HttpServer servidor = HttpServer.create(new InetSocketAddress(8081), 0);
 
         // Las rutas que empiezan con /api/ las atiende el backend
         servidor.createContext("/api/", exchange -> atenderApi(exchange));
@@ -25,7 +25,7 @@ public class Servidor {
         servidor.createContext("/", exchange -> servirArchivo(exchange));
 
         servidor.start();
-        System.out.println("Servidor listo. Abre en el navegador: http://localhost:8080");
+        System.out.println("Servidor listo. Abre en el navegador: http://localhost:8081");
     }
 
     // ---------- Decide que hacer segun la ruta ----------
@@ -60,6 +60,7 @@ public class Servidor {
             respuesta = "ERROR\nEsa ruta no existe";
         }
 
+        System.out.println(">> Ruta: /api/" + ruta + "\n" + respuesta);
         enviar(exchange, respuesta);
     }
 
@@ -87,6 +88,7 @@ public class Servidor {
 
         Usuario nuevo = new Usuario(nombre, usuario, clave); // aqui se usa el constructor
         sistema.registrar(nuevo);
+        sistema.imprimir(); // muestra los usuarios en la terminal
         return "OK\nCuenta creada. Ya puedes iniciar sesion";
     }
 
@@ -122,6 +124,7 @@ public class Servidor {
         }
 
         encontrado.cambiarClave(claveNueva);
+        sistema.imprimir(); // muestra los usuarios en la terminal
         return "OK\nContrasena cambiada. Ya puedes iniciar sesion";
     }
 
@@ -137,6 +140,7 @@ public class Servidor {
         }
 
         sistema.eliminar(encontrado);
+        sistema.imprimir(); // muestra los usuarios en la terminal
         return "OK\nCuenta eliminada";
     }
 
