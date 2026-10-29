@@ -1,6 +1,7 @@
 // =====================================================
 //  CALCULADORA DE MATERIALES - script.js
-//  Todo el codigo esta explicado con comentarios
+//  Ahora TODO pasa por el backend en Java (rutas /api/...)
+//  El JS solo muestra pantallas, lee los inputs y pinta resultados
 // =====================================================
 
 // Variable para saber que espesor de muro esta elegido (20 o 30)
@@ -48,127 +49,110 @@ function mostrarResultado(idCaja, lineas) {
 }
 
 
-// ---------- USUARIOS (se guardan en el navegador con localStorage) ----------
+// ---------- CONEXION CON EL BACKEND (JAVA) ----------
 
-// Trae la lista de usuarios guardados
-function obtenerUsuarios() {
-  var texto = localStorage.getItem("usuarios");
-  if (texto == null) {
-    return [];
+// Envia datos al servidor Java y ejecuta "alTerminar" si todo salio bien.
+//  ruta:       a cual ruta llamar. Ej: "login"  ->  /api/login
+//  datos:      objeto con lo que se envia. Ej: { usuario: "juan", clave: "123456" }
+//  alTerminar: funcion que recibe las lineas de la respuesta (sin el "OK")
+//
+// El servidor SIEMPRE responde texto: la primera linea es "OK" o "ERROR"
+// y las demas lineas son el mensaje o los datos.
+function llamarApi(ruta, datos, alTerminar) {
+
+  // Convertimos el objeto en texto: usuario=juan&clave=123456
+  var partes = [];
+  for (var clave in datos) {
+    partes.push(encodeURIComponent(clave) + "=" + encodeURIComponent(datos[clave]));
   }
-  return JSON.parse(texto);
-}
 
-// Guarda la lista de usuarios
-function guardarUsuarios(lista) {
-  localStorage.setItem("usuarios", JSON.stringify(lista));
-}
+  fetch("/api/" + ruta, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: partes.join("&")
+  })
+  .then(function (respuesta) {
+    return respuesta.text();
+  })
+  .then(function (texto) {
+    // Separamos la respuesta por lineas y quitamos las vacias
+    var lineas = texto.split("\n").filter(function (l) { return l != ""; });
+    var estado = lineas[0];
+    var contenido = lineas.slice(1);
 
-// Buscar un usuario por su nombre de usuario (devuelve la posicion o -1)
-function buscarUsuario(usuario) {
-  var lista = obtenerUsuarios();
-  for (var i = 0; i < lista.length; i++) {
-    if (lista[i].usuario == usuario) {
-      return i;
+    if (estado == "ERROR") {
+      alert(contenido.join("\n"));
+      return;
     }
+    alTerminar(contenido);
+  })
+  .catch(function () {
+    alert("No se pudo conectar con el servidor Java. Esta encendido? (java Servidor)");
+  });
+}
+
+// Convierte las lineas "Texto;valor" que manda Java en el cuadro verde
+function mostrarResultadoServidor(idCaja, contenido) {
+  var pares = [];
+  for (var i = 0; i < contenido.length; i++) {
+    pares.push(contenido[i].split(";"));
   }
-  return -1;
+  mostrarResultado(idCaja, pares);
 }
 
 
 // ---------- 1. LOGIN ----------
+// Ruta Java: /api/login  (READ)
 function iniciarSesion() {
   var usuario = document.getElementById("loginUsuario").value.trim();
   var clave = document.getElementById("loginClave").value;
 
-  var posicion = buscarUsuario(usuario);
+  llamarApi("login", { usuario: usuario, clave: clave }, function (contenido) {
+    // Java responde "OK" y en la segunda linea el nombre completo
+    var primerNombre = contenido[0].split(" ")[0];
+    document.getElementById("saludo").innerText = "Hola, " + primerNombre;
 
-  if (posicion == -1 || obtenerUsuarios()[posicion].clave != clave) {
-    alert("Usuario o contrasena incorrectos");
-    return;
-  }
-
-  // Saludo con el primer nombre
-  var nombreCompleto = obtenerUsuarios()[posicion].nombre;
-  var primerNombre = nombreCompleto.split(" ")[0];
-  document.getElementById("saludo").innerText = "Hola, " + primerNombre;
-
-  document.getElementById("loginUsuario").value = "";
-  document.getElementById("loginClave").value = "";
-  mostrarPantalla("menu");
+    document.getElementById("loginUsuario").value = "";
+    document.getElementById("loginClave").value = "";
+    mostrarPantalla("menu");
+  });
 }
 
 
 // ---------- 2. REGISTRO ----------
+// Ruta Java: /api/registro  (CREATE)
 function registrarUsuario() {
   var nombre = document.getElementById("regNombre").value.trim();
   var usuario = document.getElementById("regUsuario").value.trim();
   var clave = document.getElementById("regClave").value;
   var clave2 = document.getElementById("regClave2").value;
 
-  if (nombre == "" || usuario == "" || clave == "") {
-    alert("Completa todos los campos");
-    return;
-  }
-  if (clave.length < 6) {
-    alert("La contrasena debe tener minimo 6 caracteres");
-    return;
-  }
-  if (clave != clave2) {
-    alert("Las contrasenas no coinciden");
-    return;
-  }
-  if (buscarUsuario(usuario) != -1) {
-    alert("Ese usuario ya existe, elige otro");
-    return;
-  }
-
-  var lista = obtenerUsuarios();
-  lista.push({ nombre: nombre, usuario: usuario, clave: clave });
-  guardarUsuarios(lista);
-
-  alert("Cuenta creada. Ya puedes iniciar sesion");
-  document.getElementById("regNombre").value = "";
-  document.getElementById("regUsuario").value = "";
-  document.getElementById("regClave").value = "";
-  document.getElementById("regClave2").value = "";
-  mostrarPantalla("login");
+  // Las validaciones las hace Java (Servidor.registro)
+  llamarApi("registro", { nombre: nombre, usuario: usuario, clave: clave, clave2: clave2 }, function (contenido) {
+    alert(contenido[0]);
+    document.getElementById("regNombre").value = "";
+    document.getElementById("regUsuario").value = "";
+    document.getElementById("regClave").value = "";
+    document.getElementById("regClave2").value = "";
+    mostrarPantalla("login");
+  });
 }
 
 
 // ---------- 3. RECUPERAR USUARIO ----------
+// Ruta Java: /api/recuperar  (UPDATE)
 function recuperarCuenta() {
   var usuario = document.getElementById("recUsuario").value.trim();
   var nombre = document.getElementById("recNombre").value.trim();
   var claveNueva = document.getElementById("recClave").value;
 
-  var posicion = buscarUsuario(usuario);
-
-  if (posicion == -1) {
-    alert("Ese usuario no existe");
-    return;
-  }
-
-  var lista = obtenerUsuarios();
-
-  // Verificamos que el nombre completo coincida (sin importar mayusculas)
-  if (lista[posicion].nombre.toLowerCase() != nombre.toLowerCase()) {
-    alert("El nombre completo no coincide con el usuario");
-    return;
-  }
-  if (claveNueva.length < 6) {
-    alert("La contrasena debe tener minimo 6 caracteres");
-    return;
-  }
-
-  lista[posicion].clave = claveNueva;
-  guardarUsuarios(lista);
-
-  alert("Contrasena cambiada. Ya puedes iniciar sesion");
-  document.getElementById("recUsuario").value = "";
-  document.getElementById("recNombre").value = "";
-  document.getElementById("recClave").value = "";
-  mostrarPantalla("login");
+  llamarApi("recuperar", { usuario: usuario, nombre: nombre, clave: claveNueva }, function (contenido) {
+    alert(contenido[0]);
+    document.getElementById("recUsuario").value = "";
+    document.getElementById("recNombre").value = "";
+    document.getElementById("recClave").value = "";
+    mostrarPantalla("login");
+  });
 }
 
 
@@ -191,147 +175,98 @@ function elegirEspesor(cm) {
   document.getElementById("btn" + cm).innerHTML = cm + " cm &#10003;";
 }
 
+// Ruta Java: /api/muro
 function calcularMuro() {
   var largo = leer("muroLargo");
   var alto = leer("muroAlto");
   if (!sonValidos([largo, alto])) return;
 
-  var superficie = largo * alto; // m2
-
-  // Cantidades por cada m2 de muro
-  var cementoPorM2, arenaPorM2, ladrillosPorM2;
-  if (espesorMuro == 30) {
-    cementoPorM2 = 15.2;
-    arenaPorM2 = 0.1147;
-    ladrillosPorM2 = 120;
-  } else {
-    cementoPorM2 = 10.13;
-    arenaPorM2 = 0.0765;
-    ladrillosPorM2 = 80;
-  }
-
-  mostrarResultado("resMuro", [
-    ["Superficie", superficie.toFixed(2) + " m2"],
-    ["Cemento necesario", (superficie * cementoPorM2).toFixed(2) + " kg"],
-    ["Arena necesaria", (superficie * arenaPorM2).toFixed(2) + " m3"],
-    ["Ladrillos", Math.ceil(superficie * ladrillosPorM2) + " unid."]
-  ]);
+  llamarApi("muro", { largo: largo, alto: alto, espesor: espesorMuro }, function (contenido) {
+    mostrarResultadoServidor("resMuro", contenido);
+  });
 }
 
 
 // ---------- 6. VIGA DE HORMIGON ----------
-// Hormigon: por cada m3 se usan 350 kg de cemento, 0.5 m3 de arena y 0.8 m3 de piedra
+// Ruta Java: /api/viga  (el ancho y el alto se envian en cm, Java los pasa a metros)
 function calcularViga() {
   var largo = leer("vigaLargo");
-  var ancho = leer("vigaAncho") / 100; // de cm a metros
-  var alto = leer("vigaAlto") / 100;   // de cm a metros
+  var ancho = leer("vigaAncho");
+  var alto = leer("vigaAlto");
   var cantidad = leer("vigaCantidad");
   if (!sonValidos([largo, ancho, alto, cantidad])) return;
 
-  var volumen = largo * ancho * alto * cantidad; // m3
-
-  mostrarResultado("resViga", [
-    ["Volumen de hormigon", volumen.toFixed(2) + " m3"],
-    ["Cemento necesario", (volumen * 350).toFixed(2) + " kg"],
-    ["Arena necesaria", (volumen * 0.5).toFixed(2) + " m3"],
-    ["Piedra necesaria", (volumen * 0.8).toFixed(2) + " m3"]
-  ]);
+  llamarApi("viga", { largo: largo, ancho: ancho, alto: alto, cantidad: cantidad }, function (contenido) {
+    mostrarResultadoServidor("resViga", contenido);
+  });
 }
 
 
 // ---------- 7. COLUMNAS DE HORMIGON ----------
+// Ruta Java: /api/columnas
 function calcularColumnas() {
   var cantidad = leer("colCantidad");
   var alto = leer("colAlto");
-  var lado1 = leer("colLado1") / 100;
-  var lado2 = leer("colLado2") / 100;
+  var lado1 = leer("colLado1");
+  var lado2 = leer("colLado2");
   if (!sonValidos([cantidad, alto, lado1, lado2])) return;
 
-  var volumen = cantidad * alto * lado1 * lado2; // m3
-
-  mostrarResultado("resColumnas", [
-    ["Volumen de hormigon", volumen.toFixed(2) + " m3"],
-    ["Cemento necesario", (volumen * 350).toFixed(2) + " kg"],
-    ["Arena necesaria", (volumen * 0.5).toFixed(2) + " m3"],
-    ["Piedra necesaria", (volumen * 0.8).toFixed(2) + " m3"]
-  ]);
+  llamarApi("columnas", { cantidad: cantidad, alto: alto, lado1: lado1, lado2: lado2 }, function (contenido) {
+    mostrarResultadoServidor("resColumnas", contenido);
+  });
 }
 
 
 // ---------- 8. CONTRAPISO ----------
-// Por cada m3: 300 kg de cemento, 0.55 m3 de arena y 0.85 m3 de piedra
+// Ruta Java: /api/contrapiso
 function calcularContrapiso() {
   var largo = leer("conLargo");
   var ancho = leer("conAncho");
-  var espesor = leer("conEspesor") / 100;
+  var espesor = leer("conEspesor");
   if (!sonValidos([largo, ancho, espesor])) return;
 
-  var superficie = largo * ancho;
-  var volumen = superficie * espesor;
-
-  mostrarResultado("resContrapiso", [
-    ["Superficie", superficie.toFixed(2) + " m2"],
-    ["Volumen", volumen.toFixed(2) + " m3"],
-    ["Cemento necesario", (volumen * 300).toFixed(2) + " kg"],
-    ["Arena necesaria", (volumen * 0.55).toFixed(2) + " m3"],
-    ["Piedra necesaria", (volumen * 0.85).toFixed(2) + " m3"]
-  ]);
+  llamarApi("contrapiso", { largo: largo, ancho: ancho, espesor: espesor }, function (contenido) {
+    mostrarResultadoServidor("resContrapiso", contenido);
+  });
 }
 
 
 // ---------- 9. TECHO ----------
-// El techo inclinado es 15% mas grande que el piso (por eso multiplicamos por 1.15)
-// Usamos 12 tejas por m2 y 3 metros de listones por m2
+// Ruta Java: /api/techo
 function calcularTecho() {
   var largo = leer("techoLargo");
   var ancho = leer("techoAncho");
   if (!sonValidos([largo, ancho])) return;
 
-  var superficie = largo * ancho * 1.15;
-
-  mostrarResultado("resTecho", [
-    ["Superficie del techo", superficie.toFixed(2) + " m2"],
-    ["Tejas necesarias", Math.ceil(superficie * 12) + " unid."],
-    ["Listones de madera", (superficie * 3).toFixed(2) + " m"]
-  ]);
+  llamarApi("techo", { largo: largo, ancho: ancho }, function (contenido) {
+    mostrarResultadoServidor("resTecho", contenido);
+  });
 }
 
 
 // ---------- 10. PISOS ----------
-// Se suma 10% de baldosas extra por si se rompen
-// Pegamento: 5 kg por m2
+// Ruta Java: /api/pisos  ("lado" es el lado de la baldosa en cm)
 function calcularPisos() {
   var largo = leer("pisoLargo");
   var ancho = leer("pisoAncho");
-  var lado = leer("pisoBaldosa") / 100;
+  var lado = leer("pisoBaldosa");
   if (!sonValidos([largo, ancho, lado])) return;
 
-  var superficie = largo * ancho;
-  var areaBaldosa = lado * lado;
-  var baldosas = Math.ceil((superficie / areaBaldosa) * 1.1);
-
-  mostrarResultado("resPisos", [
-    ["Superficie", superficie.toFixed(2) + " m2"],
-    ["Baldosas (con 10% extra)", baldosas + " unid."],
-    ["Pegamento necesario", (superficie * 5).toFixed(2) + " kg"]
-  ]);
+  llamarApi("pisos", { largo: largo, ancho: ancho, lado: lado }, function (contenido) {
+    mostrarResultadoServidor("resPisos", contenido);
+  });
 }
 
 
 // ---------- 11. PINTURA ----------
-// Un litro de pintura rinde 12 m2 por mano. Un galon tiene 3.78 litros
+// Ruta Java: /api/pintura
 function calcularPintura() {
   var largo = leer("pinLargo");
   var alto = leer("pinAlto");
   var manos = leer("pinManos");
   if (!sonValidos([largo, alto, manos])) return;
 
-  var superficie = largo * alto;
-  var litros = (superficie * manos) / 12;
-
-  mostrarResultado("resPintura", [
-    ["Superficie a pintar", superficie.toFixed(2) + " m2"],
-    ["Pintura necesaria", litros.toFixed(2) + " litros"],
-    ["Galones", Math.ceil(litros / 3.78) + " galon(es)"]
-  ]);
+  llamarApi("pintura", { largo: largo, alto: alto, manos: manos }, function (contenido) {
+    mostrarResultadoServidor("resPintura", contenido);
+  });
 }
